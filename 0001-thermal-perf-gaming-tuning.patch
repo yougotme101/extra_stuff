@@ -1,0 +1,87 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Rafly <rafly@zepharo>
+Date: Fri, 10 Jul 2026 00:00:00 +0700
+Subject: [PATCH] thermal: loosen trip points and soften throttle curve for
+ sustained gaming performance
+
+This patch is a TEMPLATE. The exact node names, trip labels, and
+temperature values below are placeholders based on typical
+Snapdragon 685 (topaz) thermal-zone layouts and MUST be verified
+against your actual device tree before building.
+
+Hosted at: https://github.com/yougotme101/extra_stuff
+(0001-thermal-perf-gaming-tuning.patch)
+
+If `git apply --check` fails in CI, the node names below don't
+match your tree yet — update this file in the extra_stuff repo
+after running the grep commands below against your own source.
+
+--- HOW TO FIND YOUR REAL VALUES (run this first, do not skip) ---
+
+  grep -rn "trip@" arch/arm64/boot/dts/vendor/qcom/*.dtsi | grep -A3 "cpu"
+  grep -rln "thermal-zones" arch/arm64/boot/dts/vendor/qcom/
+
+This will show you the actual .dtsi file(s) and node paths for your
+tree (commonly something like qcom/topaz-thermal.dtsi or embedded
+inline in the main board .dts). Replace FILE_PATH and node names
+below with what you find. The values here are conservative
+starting points, not a guarantee against thermal damage.
+
+---
+ arch/arm64/boot/dts/vendor/qcom/topaz-thermal-overlay.dtsi | 45 ++++++++++++
+ 1 file changed, 45 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/vendor/qcom/topaz-thermal-overlay.dtsi
+
+diff --git a/arch/arm64/boot/dts/vendor/qcom/topaz-thermal-overlay.dtsi b/arch/arm64/boot/dts/vendor/qcom/topaz-thermal-overlay.dtsi
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/arch/arm64/boot/dts/vendor/qcom/topaz-thermal-overlay.dtsi
+@@ -0,0 +1,45 @@
++/*
++ * Gaming/performance thermal overlay for topaz (Redmi Note 12 4G, SM6225/685)
++ *
++ * Strategy:
++ *  1. Raise trip temps so throttling kicks in later (hotter allowed skin/SoC temp)
++ *  2. Widen hysteresis so the governor doesn't yo-yo between throttle steps
++ *  3. Reduce the number of intermediate mitigation steps so frequency drops
++ *     are less aggressive per step (softer curve, not a cliff)
++ *
++ * !!! You must confirm the node label (&cpu_thermal / &cpuss-0-thermal /
++ * similar) and trip-point names against your own tree's base thermal dtsi
++ * before this will apply cleanly. This is a merge overlay, not a blind sed.
++ */
++
++&cpuss0_alert0 {
++	temperature = <95000>;   /* was likely ~85000 (85C); raised to 95C */
++	hysteresis = <5000>;     /* was likely ~2000; widened to reduce yo-yo throttling */
++};
++
++&cpuss0_alert1 {
++	temperature = <103000>;  /* was likely ~95000 (95C) */
++	hysteresis = <5000>;
++};
++
++&cpuss0_crit {
++	/* Keep the hard shutdown/critical trip UNCHANGED for safety.
++	 * Do NOT raise this value — it exists to prevent permanent
++	 * hardware damage, not just performance throttling. */
++	temperature = <115000>;
++	hysteresis = <2000>;
++};
++
++&msm_gpu_thermal {
++	trips {
++		gpu_alert0 {
++			temperature = <90000>;  /* was likely ~80000 */
++			hysteresis = <5000>;
++		};
++	};
++};
++
++/* Reduce mitigation aggressiveness: fewer freq-step drops per trip crossing.
++ * If your tree uses cooling-maps with multiple cooling-device entries per
++ * trip, comment out (don't delete) intermediate steps rather than the
++ * final/highest one, so there's still a safety net. */
+--
+2.34.1

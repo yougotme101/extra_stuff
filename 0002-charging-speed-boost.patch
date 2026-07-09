@@ -1,0 +1,96 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Rafly <rafly@zepharo>
+Date: Fri, 10 Jul 2026 00:00:00 +0700
+Subject: [PATCH] power: qcom: raise charge current limits for faster
+ charging (topaz)
+
+This patch is a TEMPLATE and REQUIRES confirmation of your actual
+charger IC before it will do anything meaningful. Snapdragon 685
+devices (topaz included) commonly use a Qualcomm SMB1355/SMB1390
+(parallel charging) or QPNP-SMB5 family charger IC managed via the
+qcom,qpnp-smb5 or qcom,smb1390 driver, configured through the board
+.dts, not a single universal node name.
+
+Hosted at: https://github.com/yougotme101/extra_stuff
+(0002-charging-speed-boost.patch)
+
+If `git apply --check` fails in CI, the charger node name below
+doesn't match your tree yet — update this file in the extra_stuff
+repo after running the grep commands below against your own source.
+
+--- STEP 1: IDENTIFY YOUR REAL CHARGER NODE (run this first) ---
+
+  grep -rn "qcom,smb\|qcom,qpnp-smb\|qcom,fastchg\|qcom,batt" \
+    arch/arm64/boot/dts/vendor/qcom/*.dts arch/arm64/boot/dts/vendor/qcom/*.dtsi \
+    2>/dev/null | head -30
+
+  grep -rn "qcom,fcc-max-ua\|qcom,fastcharge-current-ma\|constant-charge-current-max-microamp" \
+    arch/arm64/boot/dts/vendor/qcom/ 2>/dev/null
+
+This will show the real property names and current node this tree
+actually uses. The property names below are the common ones across
+QCOM PMICs but MUST be checked against what step 1 found.
+
+--- SAFETY NOTE ---
+
+Raising charge current beyond what the battery cell and charger IC
+were validated for by Xiaomi/the OEM increases heat and long-term
+battery degradation risk, and in the worst case can be a fire/safety
+hazard if pushed far past the cell's rated max charge current.
+
+This revision targets a 6000mAh cell at ~33W charge power (roughly
+1C for that capacity). Stock topaz ships a ~5000mAh cell — if you
+are still on the stock battery, do NOT use these values; they assume
+a 6000mAh cell was actually installed. Verify your battery's actual
+rated max charge current (fuel-gauge/profile .dtsi or datasheet
+silkscreen) before applying this.
+
+33W maps to different current limits depending on which fast-charge
+protocol your tree actually negotiates:
+  - 5V rail (e.g. QC2.0-class bulk charging):   33W / 5V  ≈ 6.6A
+  - 9V rail (e.g. QC3.0/QC3+ direct charge):     33W / 9V  ≈ 3.66A
+This patch defaults to the 6A (1C-for-6000mAh) figure below, which
+sits between those two and matches a 5V-rail scheme reasonably well.
+If your grep in Step 1 shows a 9V/QC3-style setup instead, use the
+~3660000 uA figure noted inline below instead of 6000000.
+
+---
+ arch/arm64/boot/dts/vendor/qcom/topaz-charger-overlay.dtsi | 27 +++++++++
+ 1 file changed, 27 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/vendor/qcom/topaz-charger-overlay.dtsi
+
+diff --git a/arch/arm64/boot/dts/vendor/qcom/topaz-charger-overlay.dtsi b/arch/arm64/boot/dts/vendor/qcom/topaz-charger-overlay.dtsi
+new file mode 100644
+index 0000000..0000000
+--- /dev/null
++++ b/arch/arm64/boot/dts/vendor/qcom/topaz-charger-overlay.dtsi
+@@ -0,0 +1,27 @@
++/*
++ * Charging speed overlay for topaz (Redmi Note 12 4G, SM6225/685)
++ *
++ * Placeholder node name &pmic_charger below MUST be replaced with
++ * your tree's real charger node (commonly something like &smb5_charger,
++ * &qpnp_smb5, or &pmic_glink_power_supply depending on kernel/PMIC combo).
++ * Find it via the grep commands in this patch's commit message.
++ */
++
++&pmic_charger {
++	/* Target: ~33W charge power for a 6000mAh cell (~1C).
++	 * Defaulting to the 5V-rail interpretation (33W / 5V ≈ 6.6A,
++	 * rounded down to 6.0A / 6000000uA to stay at a clean 1C for
++	 * a 6000mAh pack rather than overshooting to 1.1C).
++	 *
++	 * If your tree's Step 1 grep shows a 9V/QC3-style direct-charge
++	 * setup instead, replace 6000000 with ~3660000 (33W / 9V) below —
++	 * a 9V rail at 6A would be ~54W, well past what topaz's charger
++	 * IC or a 6000mAh cell should see. */
++	qcom,fcc-max-ua = <6000000>;      /* fast-charge current limit: 6.0A */
++	qcom,fastchg-current-ma = <6000>; /* alternate property name, some trees use mA not uA */
++
++	/* Do NOT modify float/termination voltage (qcom,fv-max-uv or
++	 * constant-charge-voltage-max-microvolt) — that's set by the
++	 * battery cell chemistry limit, not a "speed" knob, and raising
++	 * it is a genuine safety risk (swelling/fire), unlike current. */
++};
+--
+2.34.1
