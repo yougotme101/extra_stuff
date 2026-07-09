@@ -11,8 +11,8 @@ devices (topaz included) commonly use a Qualcomm SMB1355/SMB1390
 qcom,qpnp-smb5 or qcom,smb1390 driver, configured through the board
 .dts, not a single universal node name.
 
-Hosted at: https://github.com/yougotme101/extra_patches
-(0002-charging-speed-boost.patch)
+Hosted at: https://github.com/yougotme101/extra_stuff
+(0001-charging-speed-boost.patch)
 
 If `git apply --check` fails in CI, the charger node name below
 doesn't match your tree yet — update this file in the extra_patches
